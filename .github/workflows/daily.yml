@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Target Repository
         uses: actions/checkout@v4
         with:
-          repository: nishant4671/leetcode
+          repository: yogeshbhadoriya2056/leetcode
           path: target-repo
           # Ensure you are using your Personal Access Token secret here for push access
           token: ${{ secrets.GH_PAT }} 
@@ -77,8 +77,8 @@ jobs:
       - name: Save Striver Progress to Bot Repo
         if: always()
         run: |
-          git config --global user.name "nishant4671"
-          git config --global user.email "nishantkr4671@gmail.com"
+          git config --global user.name "yogeshbhadoriya2056"
+          git config --global user.email "yogeshbhadoriya2056@gmail.com"
           git add striver_progress.txt
           git commit -m "Update Striver progress index" || echo "No index changes to commit"
           git push  
@@ -92,8 +92,8 @@ jobs:
           mv Striver-* target-repo/ 2>/dev/null || true
           
           cd target-repo
-          git config user.name "nishant4671"
-          git config user.email "nishantkr4671@gmail.com"
+          git config user.name "yogeshbhadoriya2056"
+          git config user.email "yogeshbhadoriya2056@gmail.com"
           git add .
           git commit -m "Auto-Solved: Daily, Random, and Striver" || echo "No changes to commit"
           git push
