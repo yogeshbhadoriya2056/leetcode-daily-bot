@@ -1,99 +1,74 @@
-name: Daily LeetCode Auto-Solve
+
+name: Safe Workflow Check
 
 on:
-  schedule:
-    - cron: '15 0 * * *'
-  # This line brings back the "Run workflow" button
   workflow_dispatch:
-# Add this specific block to grant push access
-permissions:
-  contents: write
-jobs:
-  solve:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Bot Repository
-        uses: actions/checkout@v4
 
-      - name: Checkout Target Repository
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout bot repository
         uses: actions/checkout@v4
-        with:
-          repository: yogeshbhadoriya2056/leetcode
-          path: target-repo
-          # Ensure you are using your Personal Access Token secret here for push access
-          token: ${{ secrets.GH_PAT }} 
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.10"
 
-      - name: Install Dependencies
-        run: pip install requests curl_cffi==0.16.2
-
-      - name: Run Auto-Solver (Daily Challenge)
-        env:
-          LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
-          LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python solve.py --mode daily
-
-      - name: Run Auto-Solver (Random Unsolved)
-        # if: always() ensures the Random problem still runs even if the Daily problem fails
-        if: always()
-        env:
-          LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
-          LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python solve.py --mode random
-
-      - name: Run Auto-Solver (HackerRank)
-        if: always()
-        env:
-          HACKERRANK_COOKIE: ${{ secrets.HACKERRANK_COOKIE }}
-          HACKERRANK_CSRF: ${{ secrets.HACKERRANK_CSRF }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python hackerrank.py
-
-      - name: Run Auto-Solver (Striver A2Z)
-        if: always()
-        env:
-          LEETCODE_SESSION: ${{ secrets.LEETCODE_SESSION }}
-          LEETCODE_CSRF_TOKEN: ${{ secrets.LEETCODE_CSRF_TOKEN }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python striver.py
-
-      - name: Save Striver Progress to Bot Repo
-        if: always()
+      - name: Install dependencies
         run: |
-          git config --global user.name "yogeshbhadoriya2056"
-          git config --global user.email "yogeshbhadoriya2056@gmail.com"
-          git add striver_progress.txt
-          git commit -m "Update Striver progress index" || echo "No index changes to commit"
-          git push  
+          python -m pip install --upgrade pip
+          python -m pip install requests curl_cffi==0.16.2
 
-      - name: Commit and Push to LeetHub Repo
-        if: always()
+      - name: Check Python syntax
         run: |
-          # Move all three folder naming conventions into the target repository
-          mv [0-9][0-9][0-9][0-9]-* target-repo/ 2>/dev/null || true
-          mv HackerRank-* target-repo/ 2>/dev/null || true
-          mv Striver-* target-repo/ 2>/dev/null || true
-          
-          cd target-repo
-          git config user.name "yogeshbhadoriya2056"
-          git config user.email "yogeshbhadoriya2056@gmail.com"
-          git add .
-          git commit -m "Auto-Solved: Daily, Random, and Striver" || echo "No changes to commit"
-          git push
+          python -m py_compile solve.py hackerrank.py striver.py
+
+      - name: Check Striver progress files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          slugs_file = Path("striver_slugs.txt")
+          progress_file = Path("striver_progress.txt")
+
+          if not slugs_file.exists():
+              raise SystemExit("ERROR: striver_slugs.txt is missing")
+
+          if not progress_file.exists():
+              raise SystemExit("ERROR: striver_progress.txt is missing")
+
+          slugs = [
+              line.strip()
+              for line in slugs_file.read_text().splitlines()
+              if line.strip()
+          ]
+
+          raw_progress = progress_file.read_text().strip()
+
+          try:
+              progress = int(raw_progress)
+          except ValueError:
+              raise SystemExit("ERROR: Progress index must be an integer")
+
+          if progress < 0 or progress > len(slugs):
+              raise SystemExit(
+                  f"ERROR: Progress index {progress} is invalid. "
+                  f"Expected 0 to {len(slugs)}."
+              )
+
+          print("Striver progress files are valid.")
+          print(f"Total problems listed: {len(slugs)}")
+          print(f"Current progress index: {progress}")
+          PY
+
+      - name: Finish safe test
+        run: |
+          echo "SUCCESS: All safe checks completed."
+          echo "No LeetCode or HackerRank solutions were submitted."
+          echo "No repository changes were pushed."
