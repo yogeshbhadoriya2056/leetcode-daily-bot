@@ -1,8 +1,10 @@
-
-name: Safe Workflow Check
+name: Daily Coding Bot - Safe Automation
 
 on:
   workflow_dispatch:
+  schedule:
+    # Runs daily at 00:15 UTC (05:45 India Standard Time)
+    - cron: "15 0 * * *"
 
 permissions:
   contents: read
@@ -10,7 +12,6 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout bot repository
         uses: actions/checkout@v4
@@ -26,8 +27,7 @@ jobs:
           python -m pip install requests curl_cffi==0.16.2
 
       - name: Check Python syntax
-        run: |
-          python -m py_compile solve.py hackerrank.py striver.py
+        run: python -m py_compile solve.py hackerrank.py striver.py
 
       - name: Check Striver progress files
         run: |
@@ -39,7 +39,6 @@ jobs:
 
           if not slugs_file.exists():
               raise SystemExit("ERROR: striver_slugs.txt is missing")
-
           if not progress_file.exists():
               raise SystemExit("ERROR: striver_progress.txt is missing")
 
@@ -48,27 +47,64 @@ jobs:
               for line in slugs_file.read_text().splitlines()
               if line.strip()
           ]
-
-          raw_progress = progress_file.read_text().strip()
-
           try:
-              progress = int(raw_progress)
+              progress = int(progress_file.read_text().strip())
           except ValueError:
               raise SystemExit("ERROR: Progress index must be an integer")
 
           if progress < 0 or progress > len(slugs):
               raise SystemExit(
-                  f"ERROR: Progress index {progress} is invalid. "
-                  f"Expected 0 to {len(slugs)}."
+                  f"ERROR: Progress index {progress} is invalid; "
+                  f"expected 0 to {len(slugs)}."
               )
 
-          print("Striver progress files are valid.")
-          print(f"Total problems listed: {len(slugs)}")
-          print(f"Current progress index: {progress}")
+          print(f"Progress files valid: {len(slugs)} listed problems; index {progress}.")
           PY
 
-      - name: Finish safe test
+      - name: Send Telegram status
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          JOB_STATUS: ${{ job.status }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          echo "SUCCESS: All safe checks completed."
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets are not configured; skipping notification."
+            exit 0
+          fi
+
+          python - <<'PY'
+          import os
+          import requests
+
+          token = os.environ["TELEGRAM_BOT_TOKEN"]
+          chat_id = os.environ["TELEGRAM_CHAT_ID"]
+          status = os.environ.get("JOB_STATUS", "unknown")
+          repo = os.environ.get("REPOSITORY", "repository")
+          run_url = os.environ.get("RUN_URL", "")
+
+          message = (
+              f"Daily coding bot safe checks: {status}\n"
+              f"Repository: {repo}\n"
+              f"Run: {run_url}\n\n"
+              "This workflow checks Python syntax and progress files only. "
+              "It does not submit solutions or push repository changes."
+          )
+          response = requests.post(
+              f"https://api.telegram.org/bot{token}/sendMessage",
+              data={"chat_id": chat_id, "text": message},
+              timeout=20,
+          )
+          response.raise_for_status()
+          if not response.json().get("ok"):
+              raise SystemExit("Telegram API did not confirm the message.")
+          print("Telegram status notification sent.")
+          PY
+
+      - name: Safe completion summary
+        run: |
+          echo "Safe daily checks completed."
           echo "No LeetCode or HackerRank solutions were submitted."
           echo "No repository changes were pushed."
